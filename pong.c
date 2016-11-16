@@ -12,7 +12,7 @@ typedef struct {
 
 	int w;
 	int h;
-} rect;
+} rect_t;
 
 typedef enum { 
 	LCD_CMD  = 0, 
@@ -174,7 +174,7 @@ void lcd_pixel(int x, int y)
 	lcd_cache_data[x][page]=chr;
 }
 
-void rect_draw(rect* rect) {
+void rect_draw(rect_t* rect) {
 	int x = rect->x;
 	int y = rect->y;
 
@@ -223,6 +223,13 @@ uint16_t adc_read(uint8_t ch)
 
 typedef enum { player_one, player_two } player_index_t;
 
+void rect_keep_in_screen(rect_t* rect) {
+	if (rect->x <= 4) rect->x = 4;
+	if (rect->y < 0) rect->y = 0;
+	if (rect->x + rect->w >= LCD_X_RES) rect->x = LCD_X_RES - rect->w;
+	if (rect->y + rect->h >= LCD_Y_RES) rect->y = LCD_Y_RES - rect->h;
+}
+
 void joystick_read(int* vx, int* vy, player_index_t pindex)
 {
 	*vx = 0;
@@ -261,13 +268,13 @@ int main()
 	adc_init();
 	lcd_init();
 
-	rect player;
+	rect_t player;
 	player.x = 4;
 	player.y = 5;
 	player.w = 4;
 	player.h = 18;
 
-	rect player2;
+	rect_t player2;
 	player2.w = 4;
 	player2.h = 25;
 	player2.y = 0;
@@ -284,21 +291,14 @@ int main()
 		if (vx != 0) player.x += vx * 1;
 		if (vy != 0) player.y += vy * 1;
 		
-		if (player.x <= 4) player.x = 4;
-		if (player.y < 0) player.y = 0;
-		if (player.x + player.w >= LCD_X_RES) player.x = LCD_X_RES - player.w;
-		if (player.y + player.h >= LCD_Y_RES) player.y = LCD_Y_RES - player.h;
-
+		rect_keep_in_screen(&player);
 		
 		joystick_read(&vx, &vy, player_two);
 
 		if (vx != 0) player2.x += vx * 1;
 		if (vy != 0) player2.y += vy * 1;
 		
-		if (player2.x <= 4) player2.x = 4;
-		if (player2.y < 0) player2.y = 0;
-		if (player2.x + player2.w >= LCD_X_RES) player2.x = LCD_X_RES - player2.w;
-		if (player2.y + player2.h >= LCD_Y_RES) player2.y = LCD_Y_RES - player2.h;
+		rect_keep_in_screen(&player2);
 
 		rect_draw(&player);
 		rect_draw(&player2);
