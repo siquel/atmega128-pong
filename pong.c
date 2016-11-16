@@ -188,12 +188,65 @@ void rect_draw(rect* rect) {
 	}
 }
 
+void adc_init()
+{
+	ADCSRA |= 1<<ADPS2; 			//Esijakaja 64 -> Taajuus sopivaksi AD-muuntimelle
+	ADCSRA |= 1<<ADPS1;
+	
+	ADMUX |= 1<<ADLAR;				//AD-muunnoksen tulos vasemmalle vieritetty
+	
+	ADMUX |= 1<<REFS0;
+	ADMUX &= ~(1<<REFS1);			//Avcc(+5v) muuntimen referenssijännitteeksi
+	
+	ADCSRA |= 1<<ADEN;				//Otetaan AD-muunnin käyttöön
+}
+
+
+uint16_t adc_read(uint8_t ch)
+{
+	uint16_t ADCresult = 0;
+
+	ADMUX &= (~0x1F);							//Nollataan rekisterin kanavanvalintabitit
+	ADMUX |= ch;								//otetaan haluttu kanava k?ytt??n
+	
+	ADCSRA |= 1<<ADSC;							//Aloitetaan uusi muunnos
+    while(!(ADCSRA & (1<<ADIF)));				//Odotetaan ett? muunnos on valmis
+	
+	uint8_t theLowADC = (ADCL>>6);				// Luetaan AD-muuntimelta tuleva LSB ja bittien siirto
+	uint8_t theHighADC = ADCH;					// Luetaan AD-muuntimelta tuleva MSB
+
+	ADCresult = theLowADC | (theHighADC<<2);	//Yhdistet??n AD-muuntimen LSB ja MSB ja bittien siirto
+	ADCresult = ADCresult & 0x03FF;				//Tuloksen maskaus	
+	
+	return ADCresult;
+}
+
+void joystick_read(int* vx, int* vy)
+{
+	*vx = 0;
+	*vy = 0;
+
+	float temp = adc_read(0); //AD-muuntimen lukeminen, kanava 0 (0b00000)
+	float xVoltage = ((temp * 5.f) / 1024);
+
+	temp = adc_read(1);//AD-muuntimen lukeminen, kanava 1 (0b00001)
+	float yVoltage = ((temp * 5.f) / 1024);
+
+	if (xVoltage < 2.4f) 
+		*vx = -1;
+	else if (xVoltage > 2.9f)
+		*vx = 1;
+
+	if (yVoltage < 2.4f)
+		*vy = -1;
+	else if (yVoltage > 2.9f)
+		*vy = 1;
+}	
+
 int main()
 {
+	adc_init();
 	lcd_init();
-
-	int y = 0;
-	int x = 0;
 
 	rect player;
 	player.x = 0;
@@ -201,12 +254,22 @@ int main()
 	player.w = 2;
 	player.h = 8;
 
+	rect player2;
+	player2.w = 2;
+	player2.h = 8;
+	player2.y = 0;
+	player2.x = LCD_X_RES - player2.w;
+
 	for (;;) 
 	{
 		lcd_clear();
 
-		player.x++;
-		player.y++;
+		int vx, vy;
+
+		joystick_read(&vx, &vy);
+
+		if (vx != 0) player.x += vx * 1;
+		if (vy != 0) player.y += vy * 1;
 		
 		if (player.x + player.w >= LCD_X_RES) player.x = 0;
 		if (player.y + player.h >= LCD_Y_RES) player.y = 0;
@@ -222,6 +285,7 @@ int main()
 		*/
 
 		rect_draw(&player);
+		rect_draw(&player2);
 		
 		_delay_ms(500);
 	}
