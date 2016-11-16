@@ -6,16 +6,26 @@
 #include <stdint.h>
 #include "font5x7.h"
 
+typedef struct {
+	int x;
+	int y;
+
+	int w;
+	int h;
+} rect;
+
 typedef enum { 
 	LCD_CMD  = 0, 
 	LCD_DATA = 1 
 } lcd_cmd_data_t;
-	
+
 
 /* Lcd screen size */
-#define LCD_X_RES 128
+#define LCD_X_RES 132
 #define LCD_Y_RES 64
 #define LCD_CACHE_SIZE ((LCD_X_RES * LCD_Y_RES) / 8)
+
+int lcd_cache_data[LCD_X_RES][8];
 
 /* Pinout for LCD */
 #define LCD_CLK_PIN 	(1<<PC4)
@@ -38,11 +48,13 @@ void lcd_clear()
 		lcd_send(0x10, LCD_CMD);
 		lcd_send(0x00, LCD_CMD);	// column 0
 
-		for(j=0;j<128;j++)
+		for(j=0;j<LCD_X_RES;j++)
 		{
 			lcd_send(0x00, LCD_DATA);
+
+			lcd_cache_data[j][i] = 0;
 		}
-	}    
+	}   
 
 	lcd_send(0xB0, LCD_CMD);	// page 0
 	lcd_send(0x10, LCD_CMD);
@@ -96,7 +108,6 @@ void lcd_send(uint8_t data, lcd_cmd_data_t cd)
 
 void lcd_init(void)
 {
-	
 	//Pull-up on reset pin
     LCD_PORT |= LCD_RST_PIN;	//Reset = 1
 	
@@ -138,6 +149,45 @@ void lcd_char(int8_t c)
 	}
 }
 
+void lcd_pixel(int x, int y)
+{
+	int page = y/8;
+	int y_line = y % 8;
+
+	int i = y_line;
+	
+	int chr = 1;
+
+	while (i > 0) {
+		chr = chr << 1;
+		--i;
+	}
+
+	chr = chr | lcd_cache_data[x][page];
+
+	lcd_send(0xB0 | page, LCD_CMD);	// page
+		
+	lcd_send(0x00 | (x & 0x0F), LCD_CMD); // what is this?
+	lcd_send(0x10 | ((x & 0xF0)>>4), LCD_CMD);	// column
+	lcd_send(chr, LCD_DATA);
+
+	lcd_cache_data[x][page]=chr;
+}
+
+void rect_draw(rect* rect) {
+	int x = rect->x;
+	int y = rect->y;
+
+	int w = rect->w;
+	int h = rect->h;
+
+	for (int i = y; i < y + h; i++) {
+		for (int j = x; j < x + w; j++) {
+			lcd_pixel(j, i);
+		}
+	}
+}
+
 int main()
 {
 	lcd_init();
@@ -145,19 +195,33 @@ int main()
 	int y = 0;
 	int x = 0;
 
+	rect player;
+	player.x = 0;
+	player.y = 5;
+	player.w = 2;
+	player.h = 8;
+
 	for (;;) 
 	{
 		lcd_clear();
-		if ( x < LCD_X_RES) ++x;
-		
-		lcd_send(0xB0 | y, LCD_CMD);	// page
 
+		player.x++;
+		player.y++;
+		
+		if (player.x + player.w >= LCD_X_RES) player.x = 0;
+		if (player.y + player.h >= LCD_Y_RES) player.y = 0;
+		/*
+		lcd_send(0xB0 | y, LCD_CMD);	// page
+		
 		lcd_send(0x00 | (x & 0x0F), LCD_CMD); // what is this?
 		lcd_send(0x10 | ((x & 0xF0)>>4), LCD_CMD);	// column
 
 		lcd_char('b');
 
 		lcd_send(0, LCD_DATA); // what is this
+		*/
+
+		rect_draw(&player);
 		
 		_delay_ms(500);
 	}
