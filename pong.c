@@ -14,6 +14,12 @@ typedef struct {
 	int h;
 } rect_t;
 
+typedef struct {
+	int x;
+	int y;
+	int radius;
+} circle_t;
+
 typedef enum { 
 	LCD_CMD  = 0, 
 	LCD_DATA = 1 
@@ -174,7 +180,7 @@ void lcd_pixel(int x, int y)
 	lcd_cache_data[x][page]=chr;
 }
 
-void rect_draw(rect_t* rect) {
+void rect_fill_draw(rect_t* rect) {
 	int x = rect->x;
 	int y = rect->y;
 
@@ -185,6 +191,45 @@ void rect_draw(rect_t* rect) {
 		for (int j = x; j < x + w; j++) {
 			lcd_pixel(j, i);
 		}
+	}
+}
+
+void circle_fill_draw(circle_t* circle) {
+ 	
+	int radius = circle->radius;
+
+	while (radius >= 0)
+	{
+  		int x = radius, y = 0;
+		int xChange = 1 - (radius << 1);
+  		int yChange = 0;
+  		int radiusError = 0;
+  		int x0 = circle->x;
+  		int y0 = circle->y;
+
+
+	  	while(x >= y)
+	  	{
+	    	lcd_pixel(x + x0, y + y0);
+	    	lcd_pixel(y + x0, x + y0);
+	    	lcd_pixel(-x + x0, y + y0);
+	    	lcd_pixel(-y + x0, x + y0);
+	    	lcd_pixel(-x + x0, -y + y0);
+	    	lcd_pixel(-y + x0, -x + y0);
+	    	lcd_pixel(x + x0, -y + y0);
+	    	lcd_pixel(y + x0, -x + y0);
+ 
+	   		y++;
+	    	radiusError += yChange;
+	    	yChange += 2;
+	    	if(((radiusError << 1) + xChange) > 0)
+	    	{
+	    	  	x--;
+	      		radiusError += xChange;
+	      		xChange += 2;
+	    	}
+	  	}
+		--radius;
 	}
 }
 
@@ -279,6 +324,13 @@ int main()
 	player2.h = 25;
 	player2.y = 0;
 	player2.x = LCD_X_RES - player2.w;
+	
+	circle_t ball;
+	ball.x = 70;
+	ball.y = 30;
+	ball.radius = 5;
+
+	int vel = 1;
 
 	for (;;) 
 	{
@@ -299,9 +351,17 @@ int main()
 		if (vy != 0) player2.y += vy * 1;
 		
 		rect_keep_in_screen(&player2);
+		
+		circle_fill_draw(&ball);
 
-		rect_draw(&player);
-		rect_draw(&player2);
+		if (ball.x == LCD_X_RES) vel = -1;
+		if (ball.x == 0) vel = 1;
+
+		ball.x += vel * 1;
+		
+
+		rect_fill_draw(&player);
+		rect_fill_draw(&player2);
 		
 		_delay_ms(16);
 	}
