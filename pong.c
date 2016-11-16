@@ -221,15 +221,28 @@ uint16_t adc_read(uint8_t ch)
 	return ADCresult;
 }
 
-void joystick_read(int* vx, int* vy)
+typedef enum { player_one, player_two } player_index_t;
+
+void joystick_read(int* vx, int* vy, player_index_t pindex)
 {
 	*vx = 0;
 	*vy = 0;
+	
+	int channelX = 0, channelY = 0;
 
-	float temp = adc_read(0); //AD-muuntimen lukeminen, kanava 0 (0b00000)
+	if (pindex == player_one) {
+		channelX = 0;
+		channelY = 1;
+	}
+	else if (pindex == player_two) {
+		channelX = 2;
+		channelY = 3;
+	}
+
+	float temp = adc_read(channelX); //AD-muuntimen lukeminen, kanava 0 (0b00000)
 	float xVoltage = ((temp * 5.f) / 1024);
 
-	temp = adc_read(1);//AD-muuntimen lukeminen, kanava 1 (0b00001)
+	temp = adc_read(channelY);//AD-muuntimen lukeminen, kanava 1 (0b00001)
 	float yVoltage = ((temp * 5.f) / 1024);
 
 	if (xVoltage < 2.4f) 
@@ -249,14 +262,14 @@ int main()
 	lcd_init();
 
 	rect player;
-	player.x = 0;
+	player.x = 4;
 	player.y = 5;
-	player.w = 2;
-	player.h = 8;
+	player.w = 4;
+	player.h = 18;
 
 	rect player2;
-	player2.w = 2;
-	player2.h = 8;
+	player2.w = 4;
+	player2.h = 25;
 	player2.y = 0;
 	player2.x = LCD_X_RES - player2.w;
 
@@ -266,28 +279,31 @@ int main()
 
 		int vx, vy;
 
-		joystick_read(&vx, &vy);
-
+		joystick_read(&vx, &vy, player_one);
+		
 		if (vx != 0) player.x += vx * 1;
 		if (vy != 0) player.y += vy * 1;
 		
-		if (player.x + player.w >= LCD_X_RES) player.x = 0;
-		if (player.y + player.h >= LCD_Y_RES) player.y = 0;
-		/*
-		lcd_send(0xB0 | y, LCD_CMD);	// page
+		if (player.x <= 4) player.x = 4;
+		if (player.y < 0) player.y = 0;
+		if (player.x + player.w >= LCD_X_RES) player.x = LCD_X_RES - player.w;
+		if (player.y + player.h >= LCD_Y_RES) player.y = LCD_Y_RES - player.h;
+
 		
-		lcd_send(0x00 | (x & 0x0F), LCD_CMD); // what is this?
-		lcd_send(0x10 | ((x & 0xF0)>>4), LCD_CMD);	// column
+		joystick_read(&vx, &vy, player_two);
 
-		lcd_char('b');
-
-		lcd_send(0, LCD_DATA); // what is this
-		*/
+		if (vx != 0) player2.x += vx * 1;
+		if (vy != 0) player2.y += vy * 1;
+		
+		if (player2.x <= 4) player2.x = 4;
+		if (player2.y < 0) player2.y = 0;
+		if (player2.x + player2.w >= LCD_X_RES) player2.x = LCD_X_RES - player2.w;
+		if (player2.y + player2.h >= LCD_Y_RES) player2.y = LCD_Y_RES - player2.h;
 
 		rect_draw(&player);
 		rect_draw(&player2);
 		
-		_delay_ms(500);
+		_delay_ms(16);
 	}
 	return 0;
 }
