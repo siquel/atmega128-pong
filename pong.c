@@ -1,5 +1,6 @@
 #define F_CPU 1000000UL
 
+#include <string.h>
 #include <avr/io.h>
 #include <avr/pgmspace.h>
 #include <util/delay.h>
@@ -31,7 +32,8 @@ typedef enum {
 #define LCD_Y_RES 64
 #define LCD_CACHE_SIZE ((LCD_X_RES * LCD_Y_RES) / 8)
 
-int lcd_cache_data[LCD_X_RES][8];
+uint8_t cpu_framebuffer[LCD_X_RES][8];
+uint8_t gpu_framebuffer[LCD_X_RES][8];
 
 /* Pinout for LCD */
 #define LCD_CLK_PIN 	(1<<PC4)
@@ -57,14 +59,18 @@ void lcd_clear()
 		for(j=0;j<LCD_X_RES;j++)
 		{
 			lcd_send(0x00, LCD_DATA);
+			
 
-			lcd_cache_data[j][i] = 0;
+			if (gpu_framebuffer[j][i] != cpu_framebuffer[j][i])
+				cpu_framebuffer[j][i] = 0;
 		}
 	}   
 
 	lcd_send(0xB0, LCD_CMD);	// page 0
 	lcd_send(0x10, LCD_CMD);
 	lcd_send(0x00, LCD_CMD);	// column 0
+
+	memset(cpu_framebuffer, 0, sizeof cpu_framebuffer);
 }
 
 void lcd_send(uint8_t data, lcd_cmd_data_t cd)
@@ -114,6 +120,9 @@ void lcd_send(uint8_t data, lcd_cmd_data_t cd)
 
 void lcd_init(void)
 {
+	memset(cpu_framebuffer, 0, sizeof cpu_framebuffer);
+	memset(gpu_framebuffer, 0, sizeof gpu_framebuffer);
+
 	//Pull-up on reset pin
     LCD_PORT |= LCD_RST_PIN;	//Reset = 1
 	
@@ -169,15 +178,30 @@ void lcd_pixel(int x, int y)
 		--i;
 	}
 
-	chr = chr | lcd_cache_data[x][page];
+	chr = chr | cpu_framebuffer[x][page];
 
-	lcd_send(0xB0 | page, LCD_CMD);	// page
+	cpu_framebuffer[x][page]=chr;
+}
+
+void lcd_submit()
+{
+	for (int x = 0; x < LCD_X_RES; ++x)
+	{
+		for (int y = 0; y < 8; ++y)
+		{
+			if (gpu_framebuffer[x][y] == cpu_framebuffer[x][y]) continue;
+			
+			gpu_framebuffer[x][y] = cpu_framebuffer[x][y];
+			
+			lcd_send(0xB0 | y, LCD_CMD);	// page
 		
-	lcd_send(0x00 | (x & 0x0F), LCD_CMD); // what is this?
-	lcd_send(0x10 | ((x & 0xF0)>>4), LCD_CMD);	// column
-	lcd_send(chr, LCD_DATA);
+			lcd_send(0x00 | (x & 0x0F), LCD_CMD); // what is this?
+			lcd_send(0x10 | ((x & 0xF0)>>4), LCD_CMD);	// column
 
-	lcd_cache_data[x][page]=chr;
+
+			lcd_send(gpu_framebuffer[x][y], LCD_DATA);
+		}
+	}
 }
 
 void rect_fill_draw(rect_t* rect) {
@@ -330,13 +354,14 @@ int main()
 	ball.y = 30;
 	ball.radius = 5;
 
-	int vel = 1;
+	int velx = 1;
+	int vely = 1;
 
 	for (;;) 
 	{
-		lcd_clear();
-
-		int vx, vy;
+		//lcd_clear();
+		memset(cpu_framebuffer, 0, sizeof(cpu_framebuffer));
+		int vx = 0, vy = 0;
 
 		joystick_read(&vx, &vy, player_one);
 		
@@ -354,16 +379,20 @@ int main()
 		
 		circle_fill_draw(&ball);
 
-		if (ball.x == LCD_X_RES) vel = -1;
-		if (ball.x == 0) vel = 1;
+		if (ball.x + ball.radius >= LCD_X_RES) velx = -1;
+		if (ball.x <= 0) velx = 1;
+		if (ball.y <= 0) vely = 1;
+		if (ball.y + ball.radius >= 64) vely = -1;
 
-		ball.x += vel * 1;
-		
+		ball.x += velx * 1;
+		ball.y += vely * 1;		
 
 		rect_fill_draw(&player);
 		rect_fill_draw(&player2);
 		
-		_delay_ms(16);
+
+		lcd_submit();
+		
 	}
 	return 0;
 }
