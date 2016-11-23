@@ -333,6 +333,22 @@ void joystick_read(int* vx, int* vy, player_index_t pindex)
 		*vy = 1;
 }
 
+int rect_collision_circle(rect_t* r, circle_t* circle) {
+
+	rect_t c;
+	c.x = circle->x - circle->radius;
+	c.y = circle->y - circle->radius;
+	c.h = circle->radius * 2;
+	c.w = circle->radius * 2;
+
+	int noOverlap =  r->x > (c.x + c.w) ||
+                 c.x > (r->x + r->w)  ||
+                 r->y > (c.y + c.h) ||
+                 c.y > (r->y + r->h);
+
+	return !noOverlap;
+}
+
 typedef struct {
 	rect_t paddle;
 	int score;
@@ -345,7 +361,7 @@ int main()
 
 	player_t player;
 	player.score = 0;
-	player.paddle.x = 4;
+	player.paddle.x = 8;
 	player.paddle.y = 0;
 	player.paddle.w = 4;
 	player.paddle.h = 18;
@@ -356,7 +372,7 @@ int main()
 	player2.paddle.w = player.paddle.w;
 	player2.paddle.h = player.paddle.h;
 	player2.paddle.y = 0;
-	player2.paddle.x = LCD_X_RES - player2.paddle.w;
+	player2.paddle.x = LCD_X_RES - player.paddle.x;
 	
 	circle_t ball;
 	ball.x = 70;
@@ -365,6 +381,8 @@ int main()
 
 	int velx = 1;
 	int vely = 1;
+	float speed = 1.f;
+	float constant = 0.2f;
 
 	char mem[10];
 
@@ -391,19 +409,35 @@ int main()
 
 		joystick_read(&vx, &vy, player_one);
 		
-		if (vx != 0) player.paddle.x += vx * 1;
+		//if (vx != 0) player.paddle.x += vx * 1;
 		if (vy != 0) player.paddle.y += vy * 1;
 		
 		rect_keep_in_screen(&player.paddle);
 		
 		joystick_read(&vx, &vy, player_two);
 
-		if (vx != 0) player2.paddle.x += vx * 1;
+		//if (vx != 0) player2.paddle.x += vx * 1;
 		if (vy != 0) player2.paddle.y += vy * 1;
 		
 		rect_keep_in_screen(&player2.paddle);
 		
-		circle_fill_draw(&ball);
+		if (ball.y - ball.radius <= 0) vely = 1;
+		if (ball.y + ball.radius >= 64) vely = -1;
+		
+		if (rect_collision_circle(&player.paddle, &ball)) {
+			ball.x = player.paddle.x + player.paddle.w + ball.radius;
+			velx *= -1;
+			speed += constant;
+		} else if (rect_collision_circle(&player2.paddle, &ball)) {
+			ball.x = player2.paddle.x - player2.paddle.w - ball.radius;
+			velx *= -1;
+			speed += constant;
+		}
+
+		ball.x += velx * speed;
+		ball.y += vely * speed;	
+
+		
 
 		int spawn = 0;
 
@@ -419,14 +453,10 @@ int main()
 		if (spawn) {
 			ball.x = 70;
 			ball.y = 30;
-		} else {
-			if (ball.y - ball.radius <= 0) vely = 1;
-			if (ball.y + ball.radius >= 64) vely = -1;
+			speed = 1.f;
 		}
 
-		ball.x += velx * 1;
-		ball.y += vely * 1;		
-
+		circle_fill_draw(&ball);
 		rect_fill_draw(&player.paddle);
 		rect_fill_draw(&player2.paddle);
 		
@@ -452,7 +482,7 @@ int main()
 
 			// reset
 			player.score = 0;
-			player.paddle.x = 4;
+			player.paddle.x = 8;
 			player.paddle.y = 0;
 			player.paddle.w = 4;
 			player.paddle.h = 18;
@@ -461,11 +491,13 @@ int main()
 			player2.paddle.w = player.paddle.w;
 			player2.paddle.h = player.paddle.h;
 			player2.paddle.y = 0;
-			player2.paddle.x = LCD_X_RES - player2.paddle.w;
+				player2.paddle.x = LCD_X_RES - player.paddle.x;
 			
 			ball.x = 70;
 			ball.y = 30;
 			ball.radius = 5;
+
+			speed = 1.f;
 		}
 	}
 	return 0;
