@@ -1,6 +1,7 @@
 #define F_CPU 1000000UL
 
 #include <string.h>
+#include <stdio.h>
 #include <avr/io.h>
 #include <avr/pgmspace.h>
 #include <util/delay.h>
@@ -156,11 +157,11 @@ void lcd_init(void)
 	//fdevopen(lcd_chr, 0);
 }
 
-void lcd_char(int8_t c)
+void lcd_char(int x, int y, int8_t c)
 {
-	for (uint8_t i = 0; i < 5; ++i)
+	for (int i = 0; i < 5; ++i)
 	{
-		lcd_send(pgm_read_byte(&font5x7[c - 32][i]) << 1, LCD_DATA);
+		cpu_framebuffer[x + i][y] = (pgm_read_byte(&font5x7[c - 32][i]) << 1);
 	}
 }
 
@@ -330,24 +331,32 @@ void joystick_read(int* vx, int* vy, player_index_t pindex)
 		*vy = -1;
 	else if (yVoltage > 2.9f)
 		*vy = 1;
-}	
+}
+
+typedef struct {
+	rect_t paddle;
+	int score;
+} player_t;
 
 int main()
 {
 	adc_init();
 	lcd_init();
 
-	rect_t player;
-	player.x = 4;
-	player.y = 5;
-	player.w = 4;
-	player.h = 18;
+	player_t player;
+	player.score = 0;
+	player.paddle.x = 4;
+	player.paddle.y = 0;
+	player.paddle.w = 4;
+	player.paddle.h = 18;
+	
 
-	rect_t player2;
-	player2.w = 4;
-	player2.h = 25;
-	player2.y = 0;
-	player2.x = LCD_X_RES - player2.w;
+	player_t player2;
+	player2.score = 0;
+	player2.paddle.w = player.paddle.w;
+	player2.paddle.h = player.paddle.h;
+	player2.paddle.y = 0;
+	player2.paddle.x = LCD_X_RES - player2.paddle.w;
 	
 	circle_t ball;
 	ball.x = 70;
@@ -357,38 +366,55 @@ int main()
 	int velx = 1;
 	int vely = 1;
 
+	char mem[10];
+
 	for (;;) 
 	{
 		//lcd_clear();
 		memset(cpu_framebuffer, 0, sizeof(cpu_framebuffer));
+
+		
+		memset(mem, 0, sizeof mem);
+		sprintf(mem, "P1: %d", player.score);
+		
+		for (int i = 0; i < strlen(mem); ++i)
+			lcd_char(20 + i * 6, 1, mem[i]);		
+
+		memset(mem, 0, sizeof mem);
+
+		sprintf(mem, "P2: %d", player2.score);
+	
+		for (int i = 0; i < strlen(mem); ++i)
+			lcd_char(90 + i * 6, 1, mem[i]);
+
 		int vx = 0, vy = 0;
 
 		joystick_read(&vx, &vy, player_one);
 		
-		if (vx != 0) player.x += vx * 1;
-		if (vy != 0) player.y += vy * 1;
+		if (vx != 0) player.paddle.x += vx * 1;
+		if (vy != 0) player.paddle.y += vy * 1;
 		
-		rect_keep_in_screen(&player);
+		rect_keep_in_screen(&player.paddle);
 		
 		joystick_read(&vx, &vy, player_two);
 
-		if (vx != 0) player2.x += vx * 1;
-		if (vy != 0) player2.y += vy * 1;
+		if (vx != 0) player2.paddle.x += vx * 1;
+		if (vy != 0) player2.paddle.y += vy * 1;
 		
-		rect_keep_in_screen(&player2);
+		rect_keep_in_screen(&player2.paddle);
 		
 		circle_fill_draw(&ball);
 
 		if (ball.x + ball.radius >= LCD_X_RES) velx = -1;
-		if (ball.x <= 0) velx = 1;
-		if (ball.y <= 0) vely = 1;
+		if (ball.x - ball.radius <= 0) velx = 1;
+		if (ball.y - ball.radius <= 0) vely = 1;
 		if (ball.y + ball.radius >= 64) vely = -1;
 
 		ball.x += velx * 1;
 		ball.y += vely * 1;		
 
-		rect_fill_draw(&player);
-		rect_fill_draw(&player2);
+		rect_fill_draw(&player.paddle);
+		rect_fill_draw(&player2.paddle);
 		
 
 		lcd_submit();
