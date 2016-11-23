@@ -405,10 +405,24 @@ int main()
 		
 		circle_fill_draw(&ball);
 
-		if (ball.x + ball.radius >= LCD_X_RES) velx = -1;
-		if (ball.x - ball.radius <= 0) velx = 1;
-		if (ball.y - ball.radius <= 0) vely = 1;
-		if (ball.y + ball.radius >= 64) vely = -1;
+		int spawn = 0;
+
+		if (ball.x + ball.radius >= LCD_X_RES) {
+			++player.score;
+			spawn = 1;
+		}
+		else if (ball.x - ball.radius <= 0) {
+			++player2.score;
+			spawn = 1;
+		}
+
+		if (spawn) {
+			ball.x = 70;
+			ball.y = 30;
+		} else {
+			if (ball.y - ball.radius <= 0) vely = 1;
+			if (ball.y + ball.radius >= 64) vely = -1;
+		}
 
 		ball.x += velx * 1;
 		ball.y += vely * 1;		
@@ -416,9 +430,43 @@ int main()
 		rect_fill_draw(&player.paddle);
 		rect_fill_draw(&player2.paddle);
 		
-
 		lcd_submit();
-		
+			
+		if (player.score >= 3 || player2.score >= 3) {
+
+			memset(cpu_framebuffer, 0, sizeof(cpu_framebuffer));
+			memset(mem, 0, sizeof mem);
+
+			if (player.score > player2.score)
+				sprintf(mem, "P1 WON!");
+			else
+				sprintf(mem, "P2 WON!");
+
+			for (int i = 0; i < strlen(mem); ++i)
+				lcd_char(50 + i * 6, 4, mem[i]);
+			
+	
+			lcd_submit();
+
+			_delay_ms(7500);
+
+			// reset
+			player.score = 0;
+			player.paddle.x = 4;
+			player.paddle.y = 0;
+			player.paddle.w = 4;
+			player.paddle.h = 18;
+	
+			player2.score = 0;
+			player2.paddle.w = player.paddle.w;
+			player2.paddle.h = player.paddle.h;
+			player2.paddle.y = 0;
+			player2.paddle.x = LCD_X_RES - player2.paddle.w;
+			
+			ball.x = 70;
+			ball.y = 30;
+			ball.radius = 5;
+		}
 	}
 	return 0;
 }
